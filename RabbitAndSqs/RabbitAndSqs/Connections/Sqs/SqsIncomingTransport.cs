@@ -1,9 +1,13 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Amazon.Runtime;
+using Amazon.S3;
 using Amazon.SQS;
 using Amazon.SQS.Model;
+using Microsoft.VisualBasic;
 using Newtonsoft.Json;
 
 namespace RabbitAndSqs.Connections.Sqs
@@ -30,12 +34,15 @@ namespace RabbitAndSqs.Connections.Sqs
         private readonly IAmazonSQS _sqsClient;
         private readonly string _queueUrl;
         private readonly IMessageFactory<TModel> _messageFactory;
+        private readonly IAmazonS3 _s3;
+        private readonly string _bucketName;
 
-        public SqsIncomingTransport(IAmazonSQS sqsClient, string queueUrl, IMessageFactory<TModel> messageFactory)
+        public SqsIncomingTransport(IAmazonSQS sqsClient, string queueUrl, IMessageFactory<TModel> messageFactory, string bucketName)
         {
             _sqsClient = sqsClient;
             _queueUrl = queueUrl;
             _messageFactory = messageFactory;
+            _bucketName = bucketName;
         }
 
         public async Task Receive(IMessageReceiver<TModel> receiver, CancellationToken cancellationToken)
@@ -71,11 +78,23 @@ namespace RabbitAndSqs.Connections.Sqs
                 }
             }
 
+            var body = headerDictionary.TryGetValue(SqsOutgoingTransport<TModel>.SpilloverHeaderName, out var spillover)
+                       && bool.Parse(spillover)
+                ? await DownloadContent(msg.Body)
+                : msg.Body;
+
             // Create model with the combined headers from jsonDictionary and other attributes. 
-            var model = _messageFactory.CreateFrom(msg.Body, headerDictionary);
+            var model = _messageFactory.CreateFrom(body, headerDictionary);
 
             // Notify the receiver that we have received a message.
             await receiver.ReceiveMessage(model);
+        }
+
+        private async Task<string> DownloadContent(string msgBody)
+        {
+            var content = await _s3.GetObjectAsync(_bucketName, msgBody);
+            using var reader = new StreamReader(content.ResponseStream);
+            return await reader.ReadToEndAsync();
         }
     }
 }

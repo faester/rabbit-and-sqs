@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Amazon.S3;
 using Amazon.SQS;
 using RabbitAndSqs.Connections;
 using RabbitAndSqs.Connections.Messages;
@@ -18,7 +19,8 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         public SqsOutgoingTransport()
         {
             IAmazonSQS client= new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            _subject = new SqsOutgoingTransport<AdsMLBookings>(client, TestConfiguration.GetValue("sqs_queue"));
+            IAmazonS3 s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+            _subject = new SqsOutgoingTransport<AdsMLBookings>(client, TestConfiguration.GetValue("sqs_queue"), s3 , TestConfiguration.GetValue("s3_bucket"));
         }
 
         [Fact]

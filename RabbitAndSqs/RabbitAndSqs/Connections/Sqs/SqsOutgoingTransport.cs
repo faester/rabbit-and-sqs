@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using Amazon.S3;
 using Amazon.SQS;
 using Amazon.SQS.Model;
 using Newtonsoft.Json;
@@ -9,9 +12,14 @@ using Newtonsoft.Json;
 namespace RabbitAndSqs.Connections.Sqs
 {
     public class SqsOutgoingTransport<TModel> : IOutgoingTransport<TModel>
-        
     {
+        /// <summary>
+        /// Max sqs size - we leave plenty of room for headers
+        /// </summary>
+        public const int MaxContentSize = 262144 - 50000;
         public const string JsonHeadersAttributeName = "jsonHeaders";
+        private static readonly IDictionary<string, object> EmptyDictionary = new Dictionary<string, object>();
+        public const string SpilloverHeaderName = "IsLargeContent";
 
         /// <summary>
         /// We identify headers we want to be directly available here.
@@ -27,22 +35,42 @@ namespace RabbitAndSqs.Connections.Sqs
         private static readonly string[] RealHeaders = { "ServiceBusDescription", "ServiceBusBusinessId", "ServiceBusCustomField1", "ServiceBusCustomField2" };
 
         private readonly IAmazonSQS _sqsClient;
+        private readonly IAmazonS3 _s3Client;
+        private readonly string _spilloverBucketName;
         private readonly string _queueUrl;
 
-        public SqsOutgoingTransport(IAmazonSQS sqsClient, string queueUrl)
+        public SqsOutgoingTransport(IAmazonSQS sqsClient, string queueUrl, IAmazonS3 s3Client, string spilloverBucketName)
         {
             _sqsClient = sqsClient;
             _queueUrl = queueUrl;
+            _s3Client = s3Client;
+            _spilloverBucketName = spilloverBucketName;
         }
+
+        private async Task<string> UploadToS3(string content)
+        {
+            await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+            var key = Guid.NewGuid().ToString();
+            // Everything is cleaned up using bucket policy. So just upload and forget.
+            await _s3Client.UploadObjectFromStreamAsync(_spilloverBucketName, key, stream, EmptyDictionary);
+            return key;
+        }
+
 
         /// <summary>
         /// Performs the real sending of messages. 
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        public Task Send(ISerializedMessage<TModel> model)
+        public async Task Send(ISerializedMessage<TModel> model)
         {
-            var sendMessageRequest = new SendMessageRequest(_queueUrl, model.Content);
+            bool needsSpillOver = model.Content.Length > MaxContentSize;
+
+            var content = needsSpillOver
+                ? await UploadToS3(model.Content)
+                : model.Content;
+
+            var sendMessageRequest = new SendMessageRequest(_queueUrl, content);
             var jsonHeaders = new Dictionary<string, string>();
 
             // Send all headers as part of the request. 
@@ -71,8 +99,13 @@ namespace RabbitAndSqs.Connections.Sqs
                 StringValue = JsonConvert.SerializeObject(jsonHeaders),
             });
 
+            sendMessageRequest.MessageAttributes.Add(SpilloverHeaderName, new MessageAttributeValue
+            {
+                StringValue = needsSpillOver.ToString(),
+            });
+
             // Enqueue messages in sqs. 
-            return _sqsClient.SendMessageAsync(sendMessageRequest);
+            await _sqsClient.SendMessageAsync(sendMessageRequest);
         }
     }
 }
