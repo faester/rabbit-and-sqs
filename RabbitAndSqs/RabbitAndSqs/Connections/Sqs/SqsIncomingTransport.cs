@@ -37,27 +37,31 @@ namespace RabbitAndSqs.Connections.Sqs
         private readonly IAmazonS3 _s3;
         private readonly string _bucketName;
 
-        public SqsIncomingTransport(IAmazonSQS sqsClient, string queueUrl, IMessageFactory<TModel> messageFactory, string bucketName)
+        public SqsIncomingTransport(IAmazonSQS sqsClient, string queueUrl, IMessageFactory<TModel> messageFactory, IAmazonS3 s3, string bucketName)
         {
             _sqsClient = sqsClient;
             _queueUrl = queueUrl;
             _messageFactory = messageFactory;
             _bucketName = bucketName;
+            _s3 = s3;
         }
 
-        public async Task Receive(IMessageReceiver<TModel> receiver, CancellationToken cancellationToken)
+        public async Task<IEnumerable<ISerializedMessage<TModel>>> Receive(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            ReceiveMessageRequest request = new ReceiveMessageRequest(_queueUrl);
+            request.MaxNumberOfMessages = MaximumMessagesPerRequest;
+            request.WaitTimeSeconds = WaitTimeSeconds;
+            var response = await _sqsClient.ReceiveMessageAsync(request, cancellationToken);
+            var result = new List<ISerializedMessage<TModel>>(MaximumMessagesPerRequest);
+            foreach (var item in response.Messages)
             {
-                ReceiveMessageRequest request = new ReceiveMessageRequest(_queueUrl);
-                request.MaxNumberOfMessages = MaximumMessagesPerRequest;
-                request.WaitTimeSeconds = WaitTimeSeconds;
-                var response = await _sqsClient.ReceiveMessageAsync(request, cancellationToken);
-                response.Messages.ForEach(async msg => await DoReceive(msg, receiver));
+                var msg = await DoReceive(item);
+                result.Add(msg);
             }
+            return result;
         }
 
-        private async Task DoReceive(Message msg, IMessageReceiver<TModel> receiver)
+        private async Task<ISerializedMessage<TModel>> DoReceive(Message msg)
         {
             // Store all attributes in dictionary
             Dictionary<string, string> headerDictionary = new Dictionary<string, string>();
@@ -66,6 +70,14 @@ namespace RabbitAndSqs.Connections.Sqs
             {
                 headerDictionary[simpleAttribute.Key] = simpleAttribute.Value.StringValue;
             }
+
+            var body = headerDictionary.TryGetValue(SqsOutgoingTransport<TModel>.SpilloverHeaderName, out var spillover)
+                       && bool.Parse(spillover)
+                ? await DownloadContent(msg.Body)
+                : msg.Body;
+
+            // This is an internal setting - we remove it before sending to the user.
+            headerDictionary.Remove(SqsOutgoingTransport<TModel>.SpilloverHeaderName);
 
             // If the json dictionary is present
             if (msg.MessageAttributes.TryGetValue(SqsOutgoingTransport<TModel>.JsonHeadersAttributeName, out var value))
@@ -78,16 +90,8 @@ namespace RabbitAndSqs.Connections.Sqs
                 }
             }
 
-            var body = headerDictionary.TryGetValue(SqsOutgoingTransport<TModel>.SpilloverHeaderName, out var spillover)
-                       && bool.Parse(spillover)
-                ? await DownloadContent(msg.Body)
-                : msg.Body;
-
             // Create model with the combined headers from jsonDictionary and other attributes. 
-            var model = _messageFactory.CreateFrom(body, headerDictionary);
-
-            // Notify the receiver that we have received a message.
-            await receiver.ReceiveMessage(model);
+            return _messageFactory.CreateFrom(body, headerDictionary);
         }
 
         private async Task<string> DownloadContent(string msgBody)

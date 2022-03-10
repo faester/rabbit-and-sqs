@@ -15,13 +15,8 @@ namespace RabbitAndSqs.Connections
         Task Send(ISerializedMessage<TModel> message);
     }
 
-    public interface IMessageReceiver<TModel>
-    {
-        Task ReceiveMessage(ISerializedMessage<TModel> message);
-    }
-
     public interface IIncomingTransport<TModel>
     {
-        Task Receive(IMessageReceiver<TModel> receiver, CancellationToken cancellationToken);
+        Task<IEnumerable<ISerializedMessage<TModel>>> ReceiveBatch(CancellationToken cancellationToken);
     }
 }
