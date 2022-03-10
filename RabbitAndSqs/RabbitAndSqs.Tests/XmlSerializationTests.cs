@@ -1,3 +1,4 @@
+using System.Configuration;
 using System.IO;
 using RabbitAndSqs.Connections;
 using RabbitAndSqs.Models;
@@ -19,7 +20,7 @@ namespace RabbitAndSqs.Tests
         [Fact]
         public void Deserialize_ThenDeserializedObject()
         {
-            AdsMLBookings deserialized = _subject.Deserialize(GetXmlFileContent());
+            AdsMLBookings deserialized = _subject.Deserialize(TestConfiguration.GetXmlFileContent());
 
             deserialized.Should().NotBeNull();
         }
@@ -27,26 +28,10 @@ namespace RabbitAndSqs.Tests
         [Fact]
         public void Serialize_ThenDeserializableString()
         {
-            var serializedString = _subject.Serialize(CreatePopulatedAdsMLBookingsInstance());
+            var serializedString = _subject.Serialize(TestConfiguration.CreatePopulatedAdsMLBookingsInstance());
 
             var deserialized = _subject.Deserialize(serializedString);
             deserialized.Should().NotBeNull();
-        }
-
-        private static string GetXmlFileContent()
-        {
-            using var reader = new StreamReader(FileInfo.OpenRead());
-            return reader.ReadToEnd();
-        }
-
-        /// <summary>
-        /// Populating one of these guys isn't dead simple. Get one here...
-        /// </summary>
-        /// <returns></returns>
-        public static AdsMLBookings CreatePopulatedAdsMLBookingsInstance()
-        {
-            var serialization = new XmlSerialization<AdsMLBookings>();
-            return serialization.Deserialize(GetXmlFileContent());
         }
     }
 }
