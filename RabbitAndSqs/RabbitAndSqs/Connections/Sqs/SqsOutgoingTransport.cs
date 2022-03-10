@@ -83,7 +83,8 @@ namespace RabbitAndSqs.Connections.Sqs
                     sendMessageRequest.MessageAttributes.Add(keyValuePair.Key,
                         new MessageAttributeValue
                         {
-                            StringValue = keyValuePair.Value
+                            StringValue = keyValuePair.Value,
+                            DataType = "String",
                         });
                 }
                 else
@@ -97,11 +98,13 @@ namespace RabbitAndSqs.Connections.Sqs
             sendMessageRequest.MessageAttributes.Add(JsonHeadersAttributeName, new MessageAttributeValue
             {
                 StringValue = JsonConvert.SerializeObject(jsonHeaders),
+                DataType = "String",
             });
 
             sendMessageRequest.MessageAttributes.Add(SpilloverHeaderName, new MessageAttributeValue
             {
                 StringValue = needsSpillOver.ToString(),
+                DataType = "String", 
             });
 
             // Enqueue messages in sqs. 
