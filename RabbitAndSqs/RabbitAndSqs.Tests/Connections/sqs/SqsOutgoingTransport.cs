@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.SQS;
+using FluentAssertions;
 using RabbitAndSqs.Connections;
 using RabbitAndSqs.Connections.Messages;
 using RabbitAndSqs.Connections.Sqs;
@@ -44,6 +46,9 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         {
             ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(TestConfiguration.CreatePopulatedAdsMLBookingsInstance(), new XmlSerialization<AdsMLBookings>());
             await _subject.Send(messages);
+
+            var items = await _receive.Receive(CancellationToken.None);
+            items.Should().NotBeEmpty();
         }
     }
 }
