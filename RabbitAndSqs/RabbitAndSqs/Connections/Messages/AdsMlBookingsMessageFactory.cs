@@ -5,7 +5,7 @@ namespace RabbitAndSqs.Connections.Messages
 {
     public class AdsMlBookingsMessageFactory : IMessageFactory<AdsMLBookings>
     {
-        private readonly IModelSerializer<AdsMLBookings> _serializer = new XmlSerializer<AdsMLBookings>();
+        private readonly IModelSerializer<AdsMLBookings> _serializer = new XmlSerialization<AdsMLBookings>();
 
         public AdsMlBookingsMessageFactory() { }
 

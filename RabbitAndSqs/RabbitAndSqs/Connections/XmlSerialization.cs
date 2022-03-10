@@ -8,7 +8,7 @@ namespace RabbitAndSqs.Connections
     /// XML serializer for various models. 
     /// </summary>
     /// <typeparam name="TModel"></typeparam>
-    public class XmlSerializer<TModel> : IModelSerializer<TModel>
+    public class XmlSerialization<TModel> : IModelSerializer<TModel>
     {
         private static readonly Encoding Encoding = Encoding.UTF8;
         private readonly XmlSerializer _serializer = new XmlSerializer(typeof(TModel));
@@ -26,8 +26,7 @@ namespace RabbitAndSqs.Connections
 
         public TModel Deserialize(string serializedModel)
         {
-            using var memoryStream = new MemoryStream(Encoding.GetByteCount(serializedModel));
-            using var streamWriter = new StreamReader(memoryStream);
+            using var memoryStream = new MemoryStream(Encoding.GetBytes(serializedModel));
             return (TModel)_serializer.Deserialize(memoryStream);
         }
     }
