@@ -46,7 +46,7 @@ namespace RabbitAndSqs.Connections.Sqs
             _s3 = s3;
         }
 
-        public async Task<IEnumerable<ISerializedMessage<TModel>>> Receive(CancellationToken cancellationToken)
+        public async Task<IEnumerable<ISerializedMessage<TModel>>> ReceiveBatch(CancellationToken cancellationToken)
         {
             ReceiveMessageRequest request = new ReceiveMessageRequest(_queueUrl);
             request.MaxNumberOfMessages = MaximumMessagesPerRequest;
