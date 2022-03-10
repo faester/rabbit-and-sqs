@@ -5,11 +5,6 @@ using System.Threading.Tasks;
 
 namespace RabbitAndSqs.Connections
 {
-    public interface ISender<in TModel>
-    {
-        public Task Send(TModel model);
-    }
-
     public interface IReceiver<TModel>
     {
         public Task<IEnumerable<TModel>> ReceiveBatch();

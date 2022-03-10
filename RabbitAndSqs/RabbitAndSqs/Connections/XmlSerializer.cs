@@ -8,7 +8,7 @@ namespace RabbitAndSqs.Connections
     /// XML serializer for various models. 
     /// </summary>
     /// <typeparam name="TModel"></typeparam>
-    class XmlSerializer<TModel> : IModelSerializer<TModel>
+    public class XmlSerializer<TModel> : IModelSerializer<TModel>
     {
         private static readonly Encoding Encoding = Encoding.UTF8;
         private readonly XmlSerializer _serializer = new XmlSerializer(typeof(TModel));
