@@ -20,7 +20,7 @@ namespace RabbitAndSqs.Tests
         [Fact]
         public void Deserialize_ThenDeserializedObject()
         {
-            AdsMLBookings deserialized = _subject.Deserialize(TestConfiguration.GetXmlFileContent());
+            AdsMLBookings deserialized = _subject.Deserialize(TestConfiguration.GetAdsMLBookingXmlFileContent());
 
             deserialized.Should().NotBeNull();
         }

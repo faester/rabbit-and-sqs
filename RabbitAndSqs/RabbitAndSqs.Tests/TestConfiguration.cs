@@ -13,6 +13,7 @@ namespace RabbitAndSqs.Tests
     {
         private static readonly FileInfo ConfigFile = new FileInfo("config.json");
         private static readonly FileInfo AdsMlBookingFile = new FileInfo("adsml-bookings.xml");
+        private static readonly FileInfo InvoiceFile = new FileInfo("invoiceExample.xml");
         private static Dictionary<string, string> _settings;
 
         static TestConfiguration()
@@ -60,10 +61,22 @@ namespace RabbitAndSqs.Tests
             }
         }
 
-        public static string GetXmlFileContent()
+        public static string GetAdsMLBookingXmlFileContent()
         {
             using var reader = new StreamReader(AdsMlBookingFile.OpenRead());
             return reader.ReadToEnd();
+        }
+
+        public static string GetInvoiceXmlFileContent()
+        {
+            using var reader = new StreamReader(InvoiceFile.OpenRead());
+            return reader.ReadToEnd();
+        }
+
+        public static ZADP_INVOICE_V1 GetPopulatedInvoice()
+        {
+            var serialization = new XmlSerialization<ZADP_INVOICE_V1>();
+            return serialization.Deserialize(GetInvoiceXmlFileContent());
         }
 
         /// <summary>
@@ -73,7 +86,7 @@ namespace RabbitAndSqs.Tests
         public static AdsMLBookings CreatePopulatedAdsMLBookingsInstance()
         {
             var serialization = new XmlSerialization<AdsMLBookings>();
-            return serialization.Deserialize(GetXmlFileContent());
+            return serialization.Deserialize(GetAdsMLBookingXmlFileContent());
         }
 
         public static RegionEndpoint GetAWSRegionEndpoint()

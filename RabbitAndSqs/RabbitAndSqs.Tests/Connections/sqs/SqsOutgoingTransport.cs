@@ -15,6 +15,29 @@ using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
+    /*
+    public abstract class SqsOutgoingTransportTest<TModel>
+    {
+        private readonly SqsOutgoingTransport<TModel> _subject;
+        private readonly SqsIncomingTransport<TModel> _receive;
+
+        public SqsOutgoingTransportTest()
+        {
+            IAmazonSQS client = new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+            IAmazonS3 s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+            _subject = new SqsOutgoingTransport<TModel>(client,
+                TestConfiguration.GetValue("sqs_queue"),
+                s3,
+                TestConfiguration.GetValue("s3_bucket"));
+            _receive = new SqsIncomingTransport<TModel>(client,
+                TestConfiguration.GetValue("sqs_queue"),
+                new AdsMlBookingsMessageFactory(),
+                s3,
+                TestConfiguration.GetValue("s3_bucket"));
+
+        }
+    }
+    */
     public class SqsOutgoingTransport
     {
         private readonly SqsOutgoingTransport<AdsMLBookings> _subject;

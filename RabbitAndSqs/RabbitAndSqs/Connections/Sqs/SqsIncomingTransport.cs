@@ -76,10 +76,21 @@ namespace RabbitAndSqs.Connections.Sqs
                 result.Add(msg);
             }
 
-            // Delete the received messages. 
-            var deleteRequest = new DeleteMessageBatchRequest(_queueUrl, response.Messages.Select( x => new DeleteMessageBatchRequestEntry(x.MessageId, x.ReceiptHandle)).ToList());
-            await _sqsClient.DeleteMessageBatchAsync(deleteRequest, cancellationToken);
+            await DeleteReceivedMessages(cancellationToken, response);
             return result;
+        }
+
+        /// <summary>
+        /// Delete all received messages before returning result to caller.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <param name="response"></param>
+        /// <returns></returns>
+        private Task DeleteReceivedMessages(CancellationToken cancellationToken, ReceiveMessageResponse response)
+        {
+            // Delete the received messages. 
+            var deleteRequest = new DeleteMessageBatchRequest(_queueUrl, response.Messages.Select(x => new DeleteMessageBatchRequestEntry(x.MessageId, x.ReceiptHandle)).ToList());
+            return _sqsClient.DeleteMessageBatchAsync(deleteRequest, cancellationToken);
         }
 
         private async Task<ISerializedMessage<TModel>> DoReceive(Message msg)
