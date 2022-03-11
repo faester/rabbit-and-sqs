@@ -27,7 +27,6 @@ namespace RabbitAndSqs.Connections.Sqs
         /// </summary>
         private const int WaitTimeSeconds = 20;
 
-
         /// <summary>
         /// Attributes must be explicitly requested. A list containing
         /// the attribute name 'All' returns all attributes. 

@@ -1,6 +1,7 @@
 {
-  "sqs_queue": "",
+  "sqs_queue": "https://sqs.eu-west-1.amazonaws.com/9999999999/TEMP_lineup_example_1",
   "rabbitmq_queue": "",
-  "AWS_ACCESS_KEY_ID": "",
-  "AWS_SECRET_CLIENT_KEY": ""
+  "AWS_ACCESS_KEY_ID": "*redacted*",
+  "AWS_SECRET_CLIENT_KEY": "*redacted*",
+  "s3_bucket": "temp-lineup-spillover"
 }
