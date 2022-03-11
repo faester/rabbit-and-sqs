@@ -1,19 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-<<<<<<< HEAD
-=======
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.SQS;
-using FluentAssertions;
-using RabbitAndSqs.Connections;
-using RabbitAndSqs.Connections.Messages;
-using RabbitAndSqs.Connections.Sqs;
->>>>>>> origin/master
 using RabbitAndSqs.Models;
-using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {

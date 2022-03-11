@@ -6,16 +6,59 @@ using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.SQS;
 using Amazon.SQS.Model;
-using FluentAssertions;
 using RabbitAndSqs.Connections;
-using RabbitAndSqs.Connections.Messages;
 using RabbitAndSqs.Connections.Sqs;
 using RabbitAndSqs.Models;
-using Xunit;
+using Xunit.Abstractions;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
-    public class RabbitTransportAdsMLTest : TransportTest<AdsMLBookings>
+    public class RabbitTransportInvoiceTest : TransportTest<ZADP_INVOICE_V1>
+    {
+        private readonly string _username = "sb";
+        private readonly string _password = "sb";
+        private readonly string _host = "lb.mq-dev.jppol.net";
+        private readonly string _queue = "TEMP_lineup_testing";
+        private readonly int _port = 5672;
+        private RabbitMqTransport<ZADP_INVOICE_V1> _subject;
+
+        public RabbitTransportInvoiceTest()
+        {
+            EmptyQueue();
+        }
+
+        private void EmptyQueue()
+        {
+            var incoming = CreateIncomingTransport();
+            Task<IEnumerable<ISerializedMessage<ZADP_INVOICE_V1>>> items;
+            do
+            {
+                items = incoming.ReceiveBatch(CancellationToken.None);
+            } while (items != null && items.Result.Any());
+        }
+
+        protected override IIncomingTransport<ZADP_INVOICE_V1> CreateIncomingTransport()
+        {
+            return _subject ??= new RabbitMqTransport<ZADP_INVOICE_V1>(_queue, _username, _password, _host, _messageFactory, _port);
+        }
+
+        protected override IOutgoingTransport<ZADP_INVOICE_V1> CreateOutgoingTransport()
+        {
+            return _subject ??= new RabbitMqTransport<ZADP_INVOICE_V1>(_queue, _username, _password, _host, _messageFactory, _port);
+        }
+
+        protected override IEnumerable<KeyValuePair<string, Func<ZADP_INVOICE_V1, string>>> GetHeaderFunctions()
+        {
+            yield return new KeyValuePair<string, Func<ZADP_INVOICE_V1, string>>("ServiceBusBusinessId", invoice => invoice.I_INVOICE_TOP.INVOICE_BATCH);
+        }
+
+        protected override ZADP_INVOICE_V1 CreateModelInstance()
+        {
+            return TestConfiguration.GetPopulatedInvoice();
+        }
+    }
+
+    public class RabbitTransportAdsMlTest : TransportTest<AdsMLBookings>
     {
         private readonly string _username = "sb";
         private readonly string _password = "sb";
@@ -23,6 +66,21 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         private readonly string _queue = "TEMP_lineup_testing";
         private readonly int _port = 5672;
         private RabbitMqTransport<AdsMLBookings> _subject;
+
+        public RabbitTransportAdsMlTest()
+        {
+            EmptyQueue();
+        }
+
+        private void EmptyQueue()
+        {
+            var incoming = CreateIncomingTransport();
+            Task<IEnumerable<ISerializedMessage<AdsMLBookings>>> items;
+            do
+            {
+                items = incoming.ReceiveBatch(CancellationToken.None);
+            } while (items != null && items.Result.Any());
+        }
 
         protected override IIncomingTransport<AdsMLBookings> CreateIncomingTransport()
         {
@@ -43,69 +101,6 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         protected override AdsMLBookings CreateModelInstance()
         {
             return TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
-        }
-    }
-
-    public abstract class TransportTest<TModel>
-    {
-        protected readonly XmlMessageFactory<TModel> _messageFactory;
-
-
-        public TransportTest()
-        {
-            _messageFactory = new XmlMessageFactory<TModel>(GetHeaderFunctions().ToArray());
-        }
-
-        protected abstract IIncomingTransport<TModel> CreateIncomingTransport();
-
-        protected abstract IOutgoingTransport<TModel> CreateOutgoingTransport();
-
-        protected abstract IEnumerable<KeyValuePair<string, Func<TModel, string>>> GetHeaderFunctions();
-
-        protected abstract TModel CreateModelInstance();
-
-
-        [Fact]
-        public async Task Send_ThenNoApparentException()
-        {
-            var message = _messageFactory.CreateFrom(CreateModelInstance());
-            await CreateOutgoingTransport().Send(message);
-        }
-
-        [Fact]
-        public async Task Send_ThenReceive()
-        {
-            var message = _messageFactory.CreateFrom(CreateModelInstance());
-            await CreateOutgoingTransport().Send(message);
-
-            var items = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
-            items.Should().NotBeEmpty();
-        }
-
-        [Fact]
-        public async Task Send_ThenCanBeDeserialized()
-        {
-            var originalMessage = CreateModelInstance();
-            var message = _messageFactory.CreateFrom(originalMessage);
-
-            await CreateOutgoingTransport().Send(message);
-
-            var response = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
-            var first = response.Select(x => x.Deserialize()).Single();
-            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
-        }
-
-        [Fact]
-        public async Task Send_ThenReceiveSendItem()
-        {
-            var originalMessage = CreateModelInstance();
-            var message = _messageFactory.CreateFrom(originalMessage);
-
-            await CreateOutgoingTransport().Send(message);
-
-            var items = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
-            var first = items.Single().Deserialize();
-            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
         }
     }
 
