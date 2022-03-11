@@ -27,16 +27,32 @@ namespace RabbitAndSqs.Connections.Sqs
         /// </summary>
         private const int WaitTimeSeconds = 20;
 
+
+        /// <summary>
+        /// Attributes must be explicitly requested. A list containing
+        /// the attribute name 'All' returns all attributes. 
+        /// </summary>
+        private static readonly List<string> RequestedAttributes = new[] { "All" }.ToList();
+
         /// <summary>
         /// 10 messages in response for each request is the maximum allowed. 
         /// </summary>
         private const int MaximumMessagesPerRequest = 10;
+
         private readonly IAmazonSQS _sqsClient;
         private readonly string _queueUrl;
         private readonly IMessageFactory<TModel> _messageFactory;
         private readonly IAmazonS3 _s3;
         private readonly string _bucketName;
 
+        /// <summary>
+        /// Receive messages from SQS. 
+        /// </summary>
+        /// <param name="sqsClient">Client connecting to SQS.</param>
+        /// <param name="queueUrl">Url of queue to receive messages from.</param>
+        /// <param name="messageFactory">Deserialization logic</param>
+        /// <param name="s3">S3 client. When message content exceeds the size limit, the payload will be stored in S3.</param>
+        /// <param name="bucketName">Name of S3 bucket to use for spillover.</param>
         public SqsIncomingTransport(IAmazonSQS sqsClient, string queueUrl, IMessageFactory<TModel> messageFactory, IAmazonS3 s3, string bucketName)
         {
             _sqsClient = sqsClient;
@@ -49,6 +65,7 @@ namespace RabbitAndSqs.Connections.Sqs
         public async Task<IEnumerable<ISerializedMessage<TModel>>> ReceiveBatch(CancellationToken cancellationToken)
         {
             ReceiveMessageRequest request = new ReceiveMessageRequest(_queueUrl);
+            request.MessageAttributeNames = RequestedAttributes;
             request.MaxNumberOfMessages = MaximumMessagesPerRequest;
             request.WaitTimeSeconds = WaitTimeSeconds;
             var response = await _sqsClient.ReceiveMessageAsync(request, cancellationToken);
