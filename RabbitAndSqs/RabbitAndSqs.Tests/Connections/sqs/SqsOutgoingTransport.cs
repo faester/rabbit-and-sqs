@@ -5,7 +5,7 @@ using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
-    public class SqsOutgoingTransportTest : SqsOutgoingTransportTest<AdsMLBookings>
+    public class SqsAdsMLBookingsTest : SqsOutgoingTransportTest<AdsMLBookings>
     {
         protected override IEnumerable<KeyValuePair<string, Func<AdsMLBookings, string>>> GetHeaderFunctions()
         {

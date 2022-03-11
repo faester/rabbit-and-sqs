@@ -14,28 +14,93 @@ using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
-    public abstract class SqsOutgoingTransportTest<TModel>
+    public abstract class TransportTest<TModel>
     {
-        private readonly SqsOutgoingTransport<TModel> _subject;
-        private readonly SqsIncomingTransport<TModel> _receive;
-        private readonly IMessageFactory<TModel> _messageFactory;
-        private readonly AmazonSQSClient _client;
-        private readonly AmazonS3Client _s3;
-        private readonly string _queue;
-        private readonly string _bucket;
+        private readonly IOutgoingTransport<TModel> _outgoingTransport;
+        private readonly IIncomingTransport<TModel> _incomingTransport;
+        protected readonly XmlMessageFactory<TModel> _messageFactory;
+
+
+        public TransportTest()
+        {
+            _messageFactory = new XmlMessageFactory<TModel>(GetHeaderFunctions().ToArray());
+            _incomingTransport = CreateIncomingTransport();
+            _outgoingTransport = CreateOutgoingTransport();
+        }
+
+        protected abstract IIncomingTransport<TModel> CreateIncomingTransport();
+
+        protected abstract IOutgoingTransport<TModel> CreateOutgoingTransport();
+
+        protected abstract IEnumerable<KeyValuePair<string, Func<TModel, string>>> GetHeaderFunctions();
+
+        protected abstract TModel CreateModelInstance();
+
+
+        [Fact]
+        public async Task Send_ThenNoApparentException()
+        {
+            var message = _messageFactory.CreateFrom(CreateModelInstance());
+            await _outgoingTransport.Send(message);
+        }
+
+        [Fact]
+        public async Task Send_ThenReceive()
+        {
+            var message = _messageFactory.CreateFrom(CreateModelInstance());
+            await _outgoingTransport.Send(message);
+
+            var items = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            items.Should().NotBeEmpty();
+        }
+
+        [Fact]
+        public async Task Send_ThenCanBeDeserialized()
+        {
+            var originalMessage = CreateModelInstance();
+            var message = _messageFactory.CreateFrom(originalMessage);
+
+            await _outgoingTransport.Send(message);
+
+            var response = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            var first = response.Select(x => x.Deserialize()).Single();
+            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
+        }
+
+        [Fact]
+        public async Task Send_ThenReceiveSendItem()
+        {
+            var originalMessage = CreateModelInstance();
+            var message = _messageFactory.CreateFrom(originalMessage);
+
+            await _outgoingTransport.Send(message);
+
+            var items = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            var first = items.Single().Deserialize();
+            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
+        }
+    }
+
+    public abstract class SqsOutgoingTransportTest<TModel> : TransportTest<TModel>
+    {
+        private readonly AmazonSQSClient _client = new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+        private readonly AmazonS3Client _s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+        private readonly string _queue = TestConfiguration.GetValue("sqs_queue");
+        private readonly string _bucket = TestConfiguration.GetValue("s3_bucket");
 
         protected SqsOutgoingTransportTest()
         {
-            _messageFactory = new XmlMessageFactory<TModel>(GetHeaderFunctions().ToArray());
-
-            _client = new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            _s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            _queue = TestConfiguration.GetValue("sqs_queue");
-            _bucket = TestConfiguration.GetValue("s3_bucket");
-            _subject = new SqsOutgoingTransport<TModel>(_client, _queue, _s3, _bucket);
-            _receive = new SqsIncomingTransport<TModel>(_client,_queue, _messageFactory, _s3, _bucket);
-
             ClearQueue();
+        }
+
+        protected override IIncomingTransport<TModel> CreateIncomingTransport()
+        {
+            return new SqsIncomingTransport<TModel>(_client, _queue, _messageFactory, _s3, _bucket);
+        }
+
+        protected override IOutgoingTransport<TModel> CreateOutgoingTransport()
+        {
+            return new SqsOutgoingTransport<TModel>(_client, _queue, _s3, _bucket);
         }
 
         private void ClearQueue()
@@ -48,53 +113,6 @@ namespace RabbitAndSqs.Tests.Connections.sqs
                 _client.DeleteMessageBatchAsync(_queue, messageResponse.Result.Messages.Select(x => new DeleteMessageBatchRequestEntry(x.MessageId, x.ReceiptHandle)).ToList());
 
             } while (messageResponse.Result.Messages.Any());
-        }
-
-        protected abstract IEnumerable<KeyValuePair<string, Func<TModel, string>>> GetHeaderFunctions();
-        protected abstract TModel CreateModelInstance();
-
-
-        [Fact]
-        public async Task Send_ThenNoApparentException()
-        {
-            ISerializedMessage<TModel> messages = _messageFactory.CreateFrom(CreateModelInstance());
-            await _subject.Send(messages);
-        }
-
-        [Fact]
-        public async Task Send_ThenReceive()
-        {
-            ISerializedMessage<TModel> messages = _messageFactory.CreateFrom(CreateModelInstance());
-            await _subject.Send(messages);
-
-            var items = await _receive.ReceiveBatch(CancellationToken.None);
-            items.Should().NotBeEmpty();
-        }
-
-        [Fact]
-        public async Task Send_ThenCanBeDeserialized()
-        {
-            var originalMessage = CreateModelInstance();
-            ISerializedMessage<TModel> message = _messageFactory.CreateFrom(originalMessage);
-
-            await _subject.Send(message);
-
-            var response = await _receive.ReceiveBatch(CancellationToken.None);
-            var first = response.Select(x => x.Deserialize()).Single();
-            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
-        }
-
-        [Fact]
-        public async Task Send_ThenReceiveSendItem()
-        {
-            var originalMessage = CreateModelInstance();
-            ISerializedMessage<TModel> message = _messageFactory.CreateFrom(originalMessage);
-
-            await _subject.Send(message);
-
-            var items = await _receive.ReceiveBatch(CancellationToken.None);
-            var first = items.Single().Deserialize();
-            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
         }
     }
 }

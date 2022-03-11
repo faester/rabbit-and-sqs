@@ -41,10 +41,10 @@ namespace RabbitAndSqs.Connections.Sqs
 
         public SqsOutgoingTransport(IAmazonSQS sqsClient, string queueUrl, IAmazonS3 s3Client, string spilloverBucketName)
         {
-            _sqsClient = sqsClient;
-            _queueUrl = queueUrl;
-            _s3Client = s3Client;
-            _spilloverBucketName = spilloverBucketName;
+            _sqsClient = sqsClient ?? throw new ArgumentNullException(nameof(sqsClient));
+            _queueUrl = queueUrl ?? throw new ArgumentNullException(nameof(queueUrl));
+            _s3Client = s3Client ?? throw new ArgumentNullException(nameof(s3Client));
+            _spilloverBucketName = spilloverBucketName ?? throw new ArgumentNullException(nameof(spilloverBucketName));
         }
 
         private async Task<string> UploadToS3(string content)
