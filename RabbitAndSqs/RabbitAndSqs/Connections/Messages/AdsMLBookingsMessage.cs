@@ -6,7 +6,7 @@ namespace RabbitAndSqs.Connections.Messages
 {
     public class AdsMLBookingsMessage : AbsMessage<AdsMLBookings>
     {
-        public AdsMLBookingsMessage(AdsMLBookings content, IModelSerializer<AdsMLBookings> serializer, Dictionary<string, string> headerValues)
+        public AdsMLBookingsMessage(string content, IModelSerializer<AdsMLBookings> serializer, Dictionary<string, string> headerValues)
             : base(content, serializer, headerValues)
         {
         }

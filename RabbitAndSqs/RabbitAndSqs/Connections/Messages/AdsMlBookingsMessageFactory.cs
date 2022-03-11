@@ -11,12 +11,17 @@ namespace RabbitAndSqs.Connections.Messages
 
         public ISerializedMessage<AdsMLBookings> CreateFrom(string serializedModel, Dictionary<string, string> headerValues)
         {
-            return new AdsMLBookingsMessage(_serializer.Deserialize(serializedModel), _serializer, headerValues);
+            return new AdsMLBookingsMessage(serializedModel, _serializer, headerValues);
         }
 
-        public ISerializedMessage<AdsMLBookings> CreateFrom(AdsMLBookings model)
+        public AdsMLBookings Deserialize(string payload)
         {
-            return new AdsMLBookingsMessage(model, _serializer);
+            return _serializer.Deserialize(payload);
+        }
+
+        public string Serialize(AdsMLBookings model)
+        {
+            return _serializer.Serialize(model);
         }
     }
 }

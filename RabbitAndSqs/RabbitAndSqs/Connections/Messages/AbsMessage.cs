@@ -12,10 +12,11 @@ namespace RabbitAndSqs.Connections.Messages
             return _serializer.Deserialize(Content);
         }
 
-        protected AbsMessage(TModel content, IModelSerializer<TModel> serializer, Dictionary<string, string> headers)
+        protected AbsMessage(string content, IModelSerializer<TModel> serializer, Dictionary<string, string> headers)
         {
             _serializer = serializer;
             Headers = headers;
+            Content = content;
         }
 
         protected AbsMessage(TModel content, IModelSerializer<TModel> serializer)

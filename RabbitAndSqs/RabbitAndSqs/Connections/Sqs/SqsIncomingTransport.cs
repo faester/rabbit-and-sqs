@@ -75,6 +75,10 @@ namespace RabbitAndSqs.Connections.Sqs
                 var msg = await DoReceive(item);
                 result.Add(msg);
             }
+
+            // Delete the received messages. 
+            var deleteRequest = new DeleteMessageBatchRequest(_queueUrl, response.Messages.Select( x => new DeleteMessageBatchRequestEntry(x.MessageId, x.ReceiptHandle)).ToList());
+            await _sqsClient.DeleteMessageBatchAsync(deleteRequest, cancellationToken);
             return result;
         }
 
@@ -90,7 +94,7 @@ namespace RabbitAndSqs.Connections.Sqs
 
             var body = headerDictionary.TryGetValue(SqsOutgoingTransport<TModel>.SpilloverHeaderName, out var spillover)
                        && bool.Parse(spillover)
-                ? await DownloadContent(msg.Body)
+                ? await DownloadContentFromS3(msg.Body)
                 : msg.Body;
 
             // This is an internal setting - we remove it before sending to the user.
@@ -111,7 +115,7 @@ namespace RabbitAndSqs.Connections.Sqs
             return _messageFactory.CreateFrom(body, headerDictionary);
         }
 
-        private async Task<string> DownloadContent(string msgBody)
+        private async Task<string> DownloadContentFromS3(string msgBody)
         {
             var content = await _s3.GetObjectAsync(_bucketName, msgBody);
             using var reader = new StreamReader(content.ResponseStream);

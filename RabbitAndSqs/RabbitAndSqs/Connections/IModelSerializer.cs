@@ -1,12 +1,9 @@
-﻿using System.Collections.Generic;
-
-namespace RabbitAndSqs.Connections
+﻿namespace RabbitAndSqs.Connections
 {
-    public interface IMessageFactory<TModel>
-    {
-        ISerializedMessage<TModel> CreateFrom(string serializedModel, Dictionary<string, string> headerValues);
-    }
-
+    /// <summary>
+    /// Serialization logic for creating and deserializing message payloads
+    /// </summary>
+    /// <typeparam name="TModel"></typeparam>
     public interface IModelSerializer<TModel>
     {
         string Serialize(TModel model);

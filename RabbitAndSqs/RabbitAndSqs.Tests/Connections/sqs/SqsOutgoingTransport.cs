@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,6 +50,31 @@ namespace RabbitAndSqs.Tests.Connections.sqs
 
             var items = await _receive.ReceiveBatch(CancellationToken.None);
             items.Should().NotBeEmpty();
+        }
+
+        [Fact]
+        public async Task Send_ThenCanBeDeserialized()
+        {
+            var originalMessage = TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
+            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(originalMessage, new XmlSerialization<AdsMLBookings>());
+            
+            await _subject.Send(messages);
+
+            var response = await _receive.ReceiveBatch(CancellationToken.None);
+            var first = response.Select(x => x.Deserialize()).Single();
+            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
+        }
+
+        [Fact]
+        public async Task Send_ThenReceiveSendItem()
+        {
+            var originalMessage = TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
+            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(originalMessage, new XmlSerialization<AdsMLBookings>());
+            await _subject.Send(messages);
+
+            var items = await _receive.ReceiveBatch(CancellationToken.None);
+            var first = items.Single().Deserialize();
+            first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
         }
     }
 }
