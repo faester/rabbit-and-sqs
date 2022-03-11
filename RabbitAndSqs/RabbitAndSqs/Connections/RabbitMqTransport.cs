@@ -11,18 +11,20 @@ namespace RabbitAndSqs.Connections
     {
         private readonly IMessageFactory<TModel> _messageFactory;
 
-        private string _queue;
-        private string _username;
-        private string _password;
-        private string _hostname;
+        private readonly string _queue;
+        private readonly string _username;
+        private readonly string _password;
+        private readonly string _hostname;
+        private readonly int _port;
 
-        public RabbitMqTransport(string queue, string username, string password, string hostname, IMessageFactory<TModel> messageFactory)
+        public RabbitMqTransport(string queue, string username, string password, string hostname, IMessageFactory<TModel> messageFactory, int port)
         {
             _queue = queue;
             _username = username;
             _password = password;
             _hostname = hostname;
             _messageFactory = messageFactory;
+            _port = port;
         }
 
         public Task Send(ISerializedMessage<TModel> message)
@@ -31,17 +33,18 @@ namespace RabbitAndSqs.Connections
 
             using var channel = connection.CreateModel();
             var properties = channel.CreateBasicProperties();
+            properties.Headers ??= new Dictionary<string, object>();
             foreach (var kvp in message.Headers)
             {
                 properties.Headers[kvp.Key] = kvp.Value;
             }
 
-
             var body = Encoding.UTF8.GetBytes(message.Content);
 
             channel.QueueDeclare(queue: _queue, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            channel.ExchangeDeclare(exchange: _queue, durable: false, autoDelete:false, type: "fanout");
 
-            channel.BasicPublish(exchange: "", routingKey: "ignore", basicProperties: properties, body: body);
+            channel.BasicPublish(exchange: _queue, routingKey: "ignore", basicProperties: properties, body: body);
 
             return Task.CompletedTask;
         }
@@ -54,8 +57,15 @@ namespace RabbitAndSqs.Connections
             {
                 HostName = _hostname,
                 UserName = _username,
-                Password = _password
+                Password = _password, 
+                Port = _port,
+                VirtualHost = "servicebus",
             };
+            
+            // Channel pool maxize
+            // Prefetch global false
+            // Prefetch 
+            // Publisher acknowledgements true
             return factory.CreateConnection();
         }
 

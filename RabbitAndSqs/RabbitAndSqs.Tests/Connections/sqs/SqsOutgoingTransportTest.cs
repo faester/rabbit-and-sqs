@@ -10,22 +10,50 @@ using FluentAssertions;
 using RabbitAndSqs.Connections;
 using RabbitAndSqs.Connections.Messages;
 using RabbitAndSqs.Connections.Sqs;
+using RabbitAndSqs.Models;
 using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
+    public class RabbitTransportAdsMLTest : TransportTest<AdsMLBookings>
+    {
+        private readonly string _username = "sb";
+        private readonly string _password = "sb";
+        private readonly string _host =  "lb.mq-dev.jppol.net";
+        private readonly string _queue = "TEMP_lineup_testing";
+        private readonly int _port = 5672;
+        private RabbitMqTransport<AdsMLBookings> _subject;
+
+        protected override IIncomingTransport<AdsMLBookings> CreateIncomingTransport()
+        {
+            return _subject ??= new RabbitMqTransport<AdsMLBookings>(_queue, _username, _password, _host, _messageFactory, _port);
+        }
+
+        protected override IOutgoingTransport<AdsMLBookings> CreateOutgoingTransport()
+        {
+            return _subject ??= new RabbitMqTransport<AdsMLBookings>(_queue, _username, _password, _host, _messageFactory, _port);
+        }
+
+        protected override IEnumerable<KeyValuePair<string, Func<AdsMLBookings, string>>> GetHeaderFunctions()
+        {
+            yield return new KeyValuePair<string, Func<AdsMLBookings, string>>("ServiceBusBusinessId", adsml => adsml.AdOrder.BookingIdentifier);
+            yield return new KeyValuePair<string, Func<AdsMLBookings, string>>("ServiceBusDescription", adsml => adsml.AdOrder.Campaign.CodeValue.ToString());
+        }
+
+        protected override AdsMLBookings CreateModelInstance()
+        {
+            return TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
+        }
+    }
+
     public abstract class TransportTest<TModel>
     {
-        private readonly IOutgoingTransport<TModel> _outgoingTransport;
-        private readonly IIncomingTransport<TModel> _incomingTransport;
         protected readonly XmlMessageFactory<TModel> _messageFactory;
 
 
         public TransportTest()
         {
             _messageFactory = new XmlMessageFactory<TModel>(GetHeaderFunctions().ToArray());
-            _incomingTransport = CreateIncomingTransport();
-            _outgoingTransport = CreateOutgoingTransport();
         }
 
         protected abstract IIncomingTransport<TModel> CreateIncomingTransport();
@@ -41,16 +69,16 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         public async Task Send_ThenNoApparentException()
         {
             var message = _messageFactory.CreateFrom(CreateModelInstance());
-            await _outgoingTransport.Send(message);
+            await CreateOutgoingTransport().Send(message);
         }
 
         [Fact]
         public async Task Send_ThenReceive()
         {
             var message = _messageFactory.CreateFrom(CreateModelInstance());
-            await _outgoingTransport.Send(message);
+            await CreateOutgoingTransport().Send(message);
 
-            var items = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            var items = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
             items.Should().NotBeEmpty();
         }
 
@@ -60,9 +88,9 @@ namespace RabbitAndSqs.Tests.Connections.sqs
             var originalMessage = CreateModelInstance();
             var message = _messageFactory.CreateFrom(originalMessage);
 
-            await _outgoingTransport.Send(message);
+            await CreateOutgoingTransport().Send(message);
 
-            var response = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            var response = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
             var first = response.Select(x => x.Deserialize()).Single();
             first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
         }
@@ -73,9 +101,9 @@ namespace RabbitAndSqs.Tests.Connections.sqs
             var originalMessage = CreateModelInstance();
             var message = _messageFactory.CreateFrom(originalMessage);
 
-            await _outgoingTransport.Send(message);
+            await CreateOutgoingTransport().Send(message);
 
-            var items = await _incomingTransport.ReceiveBatch(CancellationToken.None);
+            var items = await CreateIncomingTransport().ReceiveBatch(CancellationToken.None);
             var first = items.Single().Deserialize();
             first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
         }
