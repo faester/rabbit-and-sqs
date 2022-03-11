@@ -1,25 +1,36 @@
-﻿using System.Collections.Generic;
-using RabbitAndSqs.Models;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace RabbitAndSqs.Connections.Messages
 {
-    public class AdsMlBookingsMessageFactory : IMessageFactory<AdsMLBookings>
+    public class XmlMessageFactory<TModel> : IMessageFactory<TModel>
     {
-        private readonly IModelSerializer<AdsMLBookings> _serializer = new XmlSerialization<AdsMLBookings>();
+        private readonly KeyValuePair<string, Func<TModel, string>>[] _headerFunctions;
+        private readonly IModelSerializer<TModel> _serializer = new XmlSerialization<TModel>();
 
-        public AdsMlBookingsMessageFactory() { }
-
-        public ISerializedMessage<AdsMLBookings> CreateFrom(string serializedModel, Dictionary<string, string> headerValues)
+        public XmlMessageFactory(params KeyValuePair<string,  Func<TModel, string>>[] headerFunctions)
         {
-            return new AdsMLBookingsMessage(serializedModel, _serializer, headerValues);
+            _headerFunctions = headerFunctions;
         }
 
-        public AdsMLBookings Deserialize(string payload)
+        public ISerializedMessage<TModel> CreateFrom(TModel model)
+        {
+            var headers = _headerFunctions.Select(x => new KeyValuePair<string, string>(x.Key, x.Value(model))).ToDictionary(x => x.Key, x => x.Value);
+            return CreateFrom(Serialize(model), headers);
+        }
+
+        public ISerializedMessage<TModel> CreateFrom(string serializedModel, Dictionary<string, string> headerValues)
+        {
+            return new Message<TModel>(serializedModel, _serializer, headerValues);
+        }
+
+        public TModel Deserialize(string payload)
         {
             return _serializer.Deserialize(payload);
         }
 
-        public string Serialize(AdsMLBookings model)
+        public string Serialize(TModel model)
         {
             return _serializer.Serialize(model);
         }

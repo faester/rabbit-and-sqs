@@ -4,6 +4,8 @@ namespace RabbitAndSqs.Connections
 {
     public interface IMessageFactory<TModel>
     {
+        ISerializedMessage<TModel> CreateFrom(TModel model);
+
         ISerializedMessage<TModel> CreateFrom(string serializedModel, Dictionary<string, string> headerValues);
 
         TModel Deserialize(string payload);

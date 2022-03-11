@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.SQS;
+using Amazon.SQS.Model;
 using FluentAssertions;
 using RabbitAndSqs.Connections;
 using RabbitAndSqs.Connections.Messages;
@@ -15,60 +15,57 @@ using Xunit;
 
 namespace RabbitAndSqs.Tests.Connections.sqs
 {
-    /*
     public abstract class SqsOutgoingTransportTest<TModel>
     {
         private readonly SqsOutgoingTransport<TModel> _subject;
         private readonly SqsIncomingTransport<TModel> _receive;
+        private readonly IMessageFactory<TModel> _messageFactory;
+        private readonly AmazonSQSClient _client;
+        private readonly AmazonS3Client _s3;
+        private readonly string _queue;
+        private readonly string _bucket;
 
-        public SqsOutgoingTransportTest()
+        protected SqsOutgoingTransportTest()
         {
-            IAmazonSQS client = new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            IAmazonS3 s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            _subject = new SqsOutgoingTransport<TModel>(client,
-                TestConfiguration.GetValue("sqs_queue"),
-                s3,
-                TestConfiguration.GetValue("s3_bucket"));
-            _receive = new SqsIncomingTransport<TModel>(client,
-                TestConfiguration.GetValue("sqs_queue"),
-                new AdsMlBookingsMessageFactory(),
-                s3,
-                TestConfiguration.GetValue("s3_bucket"));
+            _messageFactory = new XmlMessageFactory<TModel>(GetHeaderFunctions());
 
+            _client = new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+            _s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
+            _queue = TestConfiguration.GetValue("sqs_queue");
+            _bucket = TestConfiguration.GetValue("s3_bucket");
+            _subject = new SqsOutgoingTransport<TModel>(_client, _queue, _s3, _bucket);
+            _receive = new SqsIncomingTransport<TModel>(_client,_queue, _messageFactory, _s3, _bucket);
+
+            ClearQueue();
         }
-    }
-    */
-    public class SqsOutgoingTransport
-    {
-        private readonly SqsOutgoingTransport<AdsMLBookings> _subject;
-        private readonly SqsIncomingTransport<AdsMLBookings> _receive;
 
-        public SqsOutgoingTransport()
+        private void ClearQueue()
         {
-            IAmazonSQS client= new AmazonSQSClient(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            IAmazonS3 s3 = new AmazonS3Client(TestConfiguration.GetAwsCredentials(), TestConfiguration.GetAWSRegionEndpoint());
-            _subject = new SqsOutgoingTransport<AdsMLBookings>(client, 
-                TestConfiguration.GetValue("sqs_queue"), 
-                s3 , 
-                TestConfiguration.GetValue("s3_bucket"));
-            _receive = new SqsIncomingTransport<AdsMLBookings>(client, 
-                TestConfiguration.GetValue("sqs_queue"), 
-                new AdsMlBookingsMessageFactory(), 
-                s3, 
-                TestConfiguration.GetValue("s3_bucket"));
+            Task<ReceiveMessageResponse> messageResponse;
+            do
+            {
+                messageResponse = _client.ReceiveMessageAsync(_queue);
+                messageResponse.Wait();
+                _client.DeleteMessageBatchAsync(_queue, messageResponse.Result.Messages.Select(x => new DeleteMessageBatchRequestEntry(x.MessageId, x.ReceiptHandle)).ToList());
+
+            } while (messageResponse.Result.Messages.Any());
         }
+
+        protected abstract KeyValuePair<string, Func<TModel, string>>[] GetHeaderFunctions();
+        protected abstract TModel CreateModelInstance();
+
 
         [Fact]
         public async Task Send_ThenNoApparentException()
         {
-            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(TestConfiguration.CreatePopulatedAdsMLBookingsInstance(), new XmlSerialization<AdsMLBookings>());
+            ISerializedMessage<TModel> messages = _messageFactory.CreateFrom(CreateModelInstance());
             await _subject.Send(messages);
         }
 
         [Fact]
         public async Task Send_ThenReceive()
         {
-            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(TestConfiguration.CreatePopulatedAdsMLBookingsInstance(), new XmlSerialization<AdsMLBookings>());
+            ISerializedMessage<TModel> messages = _messageFactory.CreateFrom(CreateModelInstance());
             await _subject.Send(messages);
 
             var items = await _receive.ReceiveBatch(CancellationToken.None);
@@ -78,10 +75,10 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         [Fact]
         public async Task Send_ThenCanBeDeserialized()
         {
-            var originalMessage = TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
-            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(originalMessage, new XmlSerialization<AdsMLBookings>());
-            
-            await _subject.Send(messages);
+            var originalMessage = CreateModelInstance();
+            ISerializedMessage<TModel> message = _messageFactory.CreateFrom(originalMessage);
+
+            await _subject.Send(message);
 
             var response = await _receive.ReceiveBatch(CancellationToken.None);
             var first = response.Select(x => x.Deserialize()).Single();
@@ -91,13 +88,31 @@ namespace RabbitAndSqs.Tests.Connections.sqs
         [Fact]
         public async Task Send_ThenReceiveSendItem()
         {
-            var originalMessage = TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
-            ISerializedMessage<AdsMLBookings> messages = new AdsMLBookingsMessage(originalMessage, new XmlSerialization<AdsMLBookings>());
-            await _subject.Send(messages);
+            var originalMessage = CreateModelInstance();
+            ISerializedMessage<TModel> message = _messageFactory.CreateFrom(originalMessage);
+
+            await _subject.Send(message);
 
             var items = await _receive.ReceiveBatch(CancellationToken.None);
             var first = items.Single().Deserialize();
             first.Should().BeEquivalentTo(originalMessage, options => options.AllowingInfiniteRecursion());
+        }
+    }
+
+    public class SqsOutgoingTransportTest : SqsOutgoingTransportTest<AdsMLBookings>
+    {
+        protected override KeyValuePair<string, Func<AdsMLBookings, string>>[] GetHeaderFunctions()
+        {
+            return new[]
+            {
+                new KeyValuePair<string, Func<AdsMLBookings, string>>("ServiceBusBusinessId", adsml => adsml.AdOrder.BookingIdentifier),
+                new KeyValuePair<string, Func<AdsMLBookings, string>>("ServiceBusDescription", adsml => adsml.AdOrder.Campaign.CodeValue.ToString())
+            };
+        }
+
+        protected override AdsMLBookings CreateModelInstance()
+        {
+            return TestConfiguration.CreatePopulatedAdsMLBookingsInstance();
         }
     }
 }

@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Amazon.Runtime.Internal.Util;
 
 namespace RabbitAndSqs.Connections.Messages
 {
-    public abstract class AbsMessage<TModel> : ISerializedMessage<TModel>
+    internal abstract class AbsMessage<TModel> : ISerializedMessage<TModel>
     {
         private readonly IModelSerializer<TModel> _serializer;
         public Dictionary<string, string> Headers { get; }
@@ -19,23 +22,10 @@ namespace RabbitAndSqs.Connections.Messages
             Content = content;
         }
 
-        protected AbsMessage(TModel content, IModelSerializer<TModel> serializer)
+        protected AbsMessage(TModel content, IModelSerializer<TModel> serializer, Dictionary<string, string> headers)
         {
             _serializer = serializer;
             Headers = new Dictionary<string, string>();
-            PrepareMessage(content);
         }
-
-        private void PrepareMessage(TModel model)
-        {
-            Content = _serializer.Serialize(model);
-
-            foreach (var kvp in GetHeaderValues(model))
-            {
-                Headers[kvp.Key] = kvp.Value;
-            }
-        }
-
-        protected abstract IEnumerable<KeyValuePair<string,string>> GetHeaderValues(TModel model);
     }
 }
